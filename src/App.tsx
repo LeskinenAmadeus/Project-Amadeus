@@ -8,29 +8,52 @@ import { checkOllamaStatus, streamMessage } from "./services/ollama";
 import type { Message } from "./types/message";
 import "./App.css";
 
+function detectExpression(text: string): string | null {
+  const lower = text.toLowerCase();
+
+  if (lower.includes("sorry") || lower.includes("sad") || lower.includes("unfortunate")) {
+    return "Stanby Sad";
+  }
+
+  if (lower.includes("error") || lower.includes("danger") || lower.includes("problem")) {
+    return "Stanby Scared";
+  }
+
+  if (lower.includes("wrong") || lower.includes("ridiculous") || lower.includes("annoying")) {
+    return "Stanby Angry";
+  }
+
+  if (lower.includes("wait") || lower.includes("unexpected") || lower.includes("really")) {
+    return "Stanby Surprised";
+  }
+
+  if (lower.includes("cute") || lower.includes("embarrassing") || lower.includes("compliment")) {
+    return "Blush 1";
+  }
+
+  if (lower.includes("good") || lower.includes("great") || lower.includes("excellent") || lower.includes("nice")) {
+    return "Stanby Smile";
+  }
+
+  return null;
+}
+
 function App() {
   const [messages, setMessages] = useState<Message[]>([
-    {
-      sender: "amadeus",
-      text: "AMADEUS cognitive interface initialized.",
-    },
-    {
-      sender: "amadeus",
-      text: "Local systems are online. Awaiting operator input.",
-    },
+    { sender: "amadeus", text: "AMADEUS cognitive interface initialized." },
+    { sender: "amadeus", text: "Local systems are online. Awaiting operator input." },
   ]);
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [brainOnline, setBrainOnline] = useState(false);
+  const [activeExpression, setActiveExpression] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({
-      behavior: "smooth",
-    });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
   useEffect(() => {
@@ -59,14 +82,24 @@ function App() {
     setMessages((prev) => [...prev, userMessage, placeholderReply]);
     setInput("");
     setLoading(true);
+    setActiveExpression(null);
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
+
+    let replyText = "";
 
     try {
       await streamMessage(
         [...messages, userMessage],
         (token) => {
+          replyText += token;
+
+          const detectedExpression = detectExpression(replyText);
+          if (detectedExpression) {
+            setActiveExpression(detectedExpression);
+          }
+
           setMessages((prev) => {
             const next = [...prev];
             const lastIndex = next.length - 1;
@@ -82,11 +115,10 @@ function App() {
         controller.signal
       );
     } catch (error) {
-      if ((error as Error).name === "AbortError") {
-        return;
-      }
+      if ((error as Error).name === "AbortError") return;
 
       console.error("Ollama streaming error:", error);
+      setActiveExpression("Stanby Scared");
 
       setMessages((prev) => {
         const next = [...prev];
@@ -109,11 +141,10 @@ function App() {
   return (
     <main className="app-shell">
       <Header loading={loading} brainOnline={brainOnline} />
-
       <StatusStrip loading={loading} brainOnline={brainOnline} />
 
       <section className="main-grid">
-        <AvatarPanel />
+        <AvatarPanel activeExpression={activeExpression} />
 
         <section className="chat-panel">
           <ChatPanel messages={messages} messagesEndRef={messagesEndRef} />

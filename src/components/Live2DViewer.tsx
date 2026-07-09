@@ -22,7 +22,11 @@ const EXPRESSIONS = [
   "Stanby Surprised",
 ];
 
-function Live2DViewer() {
+type Live2DViewerProps = {
+  activeExpression: string | null;
+};
+
+function Live2DViewer({ activeExpression }: Live2DViewerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const modelRef = useRef<Live2DModel | null>(null);
 
@@ -34,6 +38,11 @@ function Live2DViewer() {
   };
 
   useEffect(() => {
+    if (!activeExpression) return;
+    setExpression(activeExpression);
+  }, [activeExpression]);
+
+  useEffect(() => {
     let app: PIXI.Application | null = null;
     let model: Live2DModel | null = null;
     let resizeObserver: ResizeObserver | null = null;
@@ -41,10 +50,7 @@ function Live2DViewer() {
 
     type FramingMode = "small" | "medium" | "large";
 
-    const getFramingMode = (
-      width: number,
-      height: number
-    ): FramingMode => {
+    const getFramingMode = (width: number, height: number): FramingMode => {
       if (width < 320 || height < 420) return "small";
       if (width < 520 || height < 620) return "medium";
       return "large";
@@ -99,12 +105,9 @@ function Live2DViewer() {
       containerRef.current.appendChild(app.view);
 
       try {
-        model = await Live2DModel.from(
-          "/live2d/Kurisu/Kurisu.model3.json",
-          {
-            autoInteract: false,
-          }
-        );
+        model = await Live2DModel.from("/live2d/Kurisu/Kurisu.model3.json", {
+          autoInteract: false,
+        });
 
         if (destroyed || !app || !model) return;
 

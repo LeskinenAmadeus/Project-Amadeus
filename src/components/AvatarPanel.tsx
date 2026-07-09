@@ -1,11 +1,15 @@
 import Live2DViewer from "./Live2DViewer";
 
-function AvatarPanel() {
+type AvatarPanelProps = {
+  activeExpression: string | null;
+};
+
+function AvatarPanel({ activeExpression }: AvatarPanelProps) {
   return (
     <aside className="avatar-panel">
       <div className="avatar-frame">
         <div className="scanline" />
-        <Live2DViewer />
+        <Live2DViewer activeExpression={activeExpression} />
       </div>
     </aside>
   );
