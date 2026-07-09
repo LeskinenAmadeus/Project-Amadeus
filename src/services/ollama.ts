@@ -19,13 +19,15 @@ function convertMessages(messages: Message[]): OllamaMessage[] {
 
 export async function streamMessage(
   messages: Message[],
-  onToken: (token: string) => void
+  onToken: (token: string) => void,
+  signal?: AbortSignal
 ) {
   const response = await fetch(OLLAMA_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
+    signal,
     body: JSON.stringify({
       model: "amadeus-kurisu",
       messages: convertMessages(messages),
@@ -40,7 +42,6 @@ export async function streamMessage(
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
-
   let buffer = "";
 
   while (true) {
@@ -59,13 +60,8 @@ export async function streamMessage(
       const parsed = JSON.parse(line);
       const token = parsed.message?.content || "";
 
-      if (token) {
-        onToken(token);
-      }
-
-      if (parsed.done) {
-        return;
-      }
+      if (token) onToken(token);
+      if (parsed.done) return;
     }
   }
 }

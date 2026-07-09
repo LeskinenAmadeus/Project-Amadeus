@@ -18,65 +18,82 @@ function App() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
-const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-useEffect(() => {
-  messagesEndRef.current?.scrollIntoView({
-    behavior: "smooth",
-  });
-}, [messages, loading]);
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+    });
+  }, [messages, loading]);
 
-const handleSend = async () => {
-  if (!input.trim() || loading) return;
-
-  const userMessage: Message = {
-    sender: "user",
-    text: input.trim(),
+  const handleStop = () => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    setLoading(false);
   };
 
-  const placeholderReply: Message = {
-    sender: "amadeus",
-    text: "",
-  };
+  const handleSend = async () => {
+    if (!input.trim() || loading) return;
 
-  const updatedMessages = [...messages, userMessage, placeholderReply];
+    const userMessage: Message = {
+      sender: "user",
+      text: input.trim(),
+    };
 
-  setMessages(updatedMessages);
-  setInput("");
-  setLoading(true);
+    const placeholderReply: Message = {
+      sender: "amadeus",
+      text: "",
+    };
 
-  try {
-    await streamMessage([...messages, userMessage], (token) => {
+    setMessages((prev) => [...prev, userMessage, placeholderReply]);
+    setInput("");
+    setLoading(true);
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    try {
+      await streamMessage(
+        [...messages, userMessage],
+        (token) => {
+          setMessages((prev) => {
+            const next = [...prev];
+            const lastIndex = next.length - 1;
+
+            next[lastIndex] = {
+              ...next[lastIndex],
+              text: next[lastIndex].text + token,
+            };
+
+            return next;
+          });
+        },
+        controller.signal
+      );
+    } catch (error) {
+      if ((error as Error).name === "AbortError") {
+        return;
+      }
+
+      console.error("Ollama streaming error:", error);
+
       setMessages((prev) => {
         const next = [...prev];
         const lastIndex = next.length - 1;
 
         next[lastIndex] = {
-          ...next[lastIndex],
-          text: next[lastIndex].text + token,
+          sender: "amadeus",
+          text: "Connection to the local cognitive system failed.",
         };
 
         return next;
       });
-    });
-  } catch (error) {
-    console.error("Ollama streaming error:", error);
-
-    setMessages((prev) => {
-      const next = [...prev];
-      const lastIndex = next.length - 1;
-
-      next[lastIndex] = {
-        sender: "amadeus",
-        text: "Connection to the local cognitive system failed.",
-      };
-
-      return next;
-    });
-  } finally {
-    setLoading(false);
-  }
-};
+    } finally {
+      abortControllerRef.current = null;
+      setLoading(false);
+    }
+  };
 
   return (
     <main className="app-shell">
@@ -91,7 +108,7 @@ const handleSend = async () => {
           <span className="status-dot" />
           <div>
             <strong>{loading ? "Processing" : "System Online"}</strong>
-            <p>v0.3.0 Cognitive Link</p>
+            <p>v0.3.4 Cognitive Link</p>
           </div>
         </div>
       </header>
@@ -131,25 +148,23 @@ const handleSend = async () => {
                 <strong>
                   {message.sender === "user" ? "Operator" : "Amadeus"}
                 </strong>
-              <p>{message.text}</p>
-            </div>
-          ))}
+                <p>{message.text}</p>
+              </div>
+            ))}
 
-          {loading && (
-            <div className="message amadeus">
-              <strong>Amadeus</strong>
-              <p>Analyzing input...</p>
-            </div>
-          )}
-
-          <div ref={messagesEndRef} />
-        </div>
+            <div ref={messagesEndRef} />
+          </div>
 
           <form
             className="input-row"
             onSubmit={(e) => {
               e.preventDefault();
-              handleSend();
+
+              if (loading) {
+                handleStop();
+              } else {
+                handleSend();
+              }
             }}
           >
             <input
@@ -159,8 +174,12 @@ const handleSend = async () => {
               disabled={loading}
             />
 
-            <button type="submit" disabled={loading || !input.trim()}>
-              {loading ? "Thinking..." : "Transmit"}
+            <button
+              type="button"
+              onClick={loading ? handleStop : handleSend}
+              disabled={!loading && !input.trim()}
+            >
+              {loading ? "Stop" : "Transmit"}
             </button>
           </form>
         </section>
