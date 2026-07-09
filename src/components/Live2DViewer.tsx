@@ -11,8 +11,27 @@ declare global {
 window.PIXI = PIXI;
 Live2DModel.registerTicker(PIXI.Ticker);
 
+const EXPRESSIONS = [
+  "Arm Change",
+  "Blush 1",
+  "Blush 2",
+  "Stanby Angry",
+  "Stanby Sad",
+  "Stanby Scared",
+  "Stanby Smile",
+  "Stanby Surprised",
+];
+
 function Live2DViewer() {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const modelRef = useRef<Live2DModel | null>(null);
+
+  const setExpression = (expressionName: string) => {
+    const model = modelRef.current;
+    if (!model) return;
+
+    model.expression(expressionName);
+  };
 
   useEffect(() => {
     let app: PIXI.Application | null = null;
@@ -26,14 +45,8 @@ function Live2DViewer() {
       width: number,
       height: number
     ): FramingMode => {
-      if (width < 320 || height < 420) {
-        return "small";
-      }
-
-      if (width < 520 || height < 620) {
-        return "medium";
-      }
-
+      if (width < 320 || height < 420) return "small";
+      if (width < 520 || height < 620) return "medium";
       return "large";
     };
 
@@ -48,31 +61,28 @@ function Live2DViewer() {
       const mode = getFramingMode(width, height);
       const isCompact = width < 520 || height < 520;
 
-      // Responsive zoom level:
-      // Smaller divisor = larger model / closer face crop.
-      // Larger divisor = smaller model / more body visible.
       const scale =
         mode === "small"
-          ? height / 720
+          ? height / 820
           : mode === "medium"
-            ? height / 900
+            ? height / 950
             : height / 1200;
 
       model.scale.set(scale);
 
-      // Keep the model centered for small and medium framing.
-      // Slightly shift it for the large/full-body view.
       model.x =
-        mode === "large"
-          ? width * 0.48
-          : width / 2;
+        mode === "small"
+          ? width * 0.52
+          : mode === "medium"
+            ? width * 0.5
+            : width * 0.48;
 
-      // This specific Kurisu model has an unusual internal origin
-      // and requires a large positive Y offset.
-      // Do not replace these values with conventional offsets.
-      model.y = isCompact
-        ? height * 2.4
-        : height * 2;
+      model.y =
+        mode === "small"
+          ? height * 2.5
+          : isCompact
+            ? height * 2.5
+            : height * 2;
     };
 
     const loadModel = async () => {
@@ -98,10 +108,10 @@ function Live2DViewer() {
 
         if (destroyed || !app || !model) return;
 
+        modelRef.current = model;
         model.anchor.set(0.5, 0.5);
 
         app.stage.addChild(model);
-
         fitModelToContainer();
 
         resizeObserver = new ResizeObserver(() => {
@@ -120,6 +130,7 @@ function Live2DViewer() {
       destroyed = true;
 
       resizeObserver?.disconnect();
+      modelRef.current = null;
       model?.destroy();
 
       app?.destroy(true, {
@@ -130,7 +141,23 @@ function Live2DViewer() {
     };
   }, []);
 
-  return <div ref={containerRef} className="live2d-container" />;
+  return (
+    <div className="live2d-viewer">
+      <div ref={containerRef} className="live2d-container" />
+
+      <div className="expression-controls">
+        {EXPRESSIONS.map((expression) => (
+          <button
+            key={expression}
+            type="button"
+            onClick={() => setExpression(expression)}
+          >
+            {expression}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default Live2DViewer;

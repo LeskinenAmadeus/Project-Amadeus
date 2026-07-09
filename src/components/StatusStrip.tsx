@@ -9,7 +9,7 @@ function StatusStrip({ loading, brainOnline }: StatusStripProps) {
       <span>Brain: {loading ? "Thinking" : brainOnline ? "Online" : "Offline"}</span>
       <span>Memory: Offline</span>
       <span>Voice: Offline</span>
-      <span>Live2D: Placeholder</span>
+      <span>Live2D: Active</span>
       <span>Model: {brainOnline ? "amadeus-kurisu" : "Unavailable"}</span>
     </section>
   );
