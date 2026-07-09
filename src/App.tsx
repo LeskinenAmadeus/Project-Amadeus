@@ -1,22 +1,59 @@
+import { useState } from "react";
+import { sendMessage } from "./services/ollama";
+import type { Message } from "./types/message";
 import "./App.css";
 
-type Message = {
-  sender: "user" | "amadeus";
-  text: string;
-};
-
-const messages: Message[] = [
-  {
-    sender: "amadeus",
-    text: "AMADEUS cognitive interface initialized.",
-  },
-  {
-    sender: "amadeus",
-    text: "Local systems are online. Awaiting operator input.",
-  },
-];
-
 function App() {
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      sender: "amadeus",
+      text: "AMADEUS cognitive interface initialized.",
+    },
+    {
+      sender: "amadeus",
+      text: "Local systems are online. Awaiting operator input.",
+    },
+  ]);
+
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSend = async () => {
+    if (!input.trim() || loading) return;
+
+    const userMessage: Message = {
+      sender: "user",
+      text: input.trim(),
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    setInput("");
+    setLoading(true);
+
+    try {
+      const response = await sendMessage(userMessage.text);
+
+      const reply: Message = {
+        sender: "amadeus",
+        text: response.message.content,
+      };
+
+      setMessages((prev) => [...prev, reply]);
+    } catch (error) {
+      console.error("Ollama communication error:", error);
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          sender: "amadeus",
+          text: "Connection to the local cognitive system failed.",
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <main className="app-shell">
       <header className="top-bar">
@@ -29,14 +66,14 @@ function App() {
         <div className="system-card">
           <span className="status-dot" />
           <div>
-            <strong>System Online</strong>
-            <p>v0.2.1 Interface Build</p>
+            <strong>{loading ? "Processing" : "System Online"}</strong>
+            <p>v0.3.0 Cognitive Link</p>
           </div>
         </div>
       </header>
 
       <section className="status-strip">
-        <span>Brain: Standby</span>
+        <span>Brain: {loading ? "Thinking" : "Standby"}</span>
         <span>Memory: Offline</span>
         <span>Voice: Offline</span>
         <span>Live2D: Placeholder</span>
@@ -67,15 +104,38 @@ function App() {
           <div className="message-list">
             {messages.map((message, index) => (
               <div key={index} className={`message ${message.sender}`}>
-                <strong>{message.sender === "user" ? "Operator" : "Amadeus"}</strong>
+                <strong>
+                  {message.sender === "user" ? "Operator" : "Amadeus"}
+                </strong>
                 <p>{message.text}</p>
               </div>
             ))}
+
+            {loading && (
+              <div className="message amadeus">
+                <strong>Amadeus</strong>
+                <p>Analyzing input...</p>
+              </div>
+            )}
           </div>
 
-          <form className="input-row">
-            <input placeholder="Send message to Amadeus..." />
-            <button type="submit">Transmit</button>
+          <form
+            className="input-row"
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSend();
+            }}
+          >
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Send message to Amadeus..."
+              disabled={loading}
+            />
+
+            <button type="submit" disabled={loading || !input.trim()}>
+              {loading ? "Thinking..." : "Transmit"}
+            </button>
           </form>
         </section>
       </section>
