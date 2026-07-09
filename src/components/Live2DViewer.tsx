@@ -20,34 +20,60 @@ function Live2DViewer() {
     let resizeObserver: ResizeObserver | null = null;
     let destroyed = false;
 
+    type FramingMode = "small" | "medium" | "large";
+
+    const getFramingMode = (
+      width: number,
+      height: number
+    ): FramingMode => {
+      if (width < 320 || height < 420) {
+        return "small";
+      }
+
+      if (width < 520 || height < 620) {
+        return "medium";
+      }
+
+      return "large";
+    };
+
     const fitModelToContainer = () => {
-        if (!app || !model || !containerRef.current) return;
+      if (!app || !model || !containerRef.current) return;
 
-        const width = containerRef.current.clientWidth;
-        const height = containerRef.current.clientHeight;
+      const width = containerRef.current.clientWidth;
+      const height = containerRef.current.clientHeight;
 
-        app.renderer.resize(width, height);
+      app.renderer.resize(width, height);
 
-        // Responsive zoom level.
-        // Larger number = smaller model / more body visible.
-         // Smaller number = larger model / closer face crop.
-        const isCompact = width < 520 || height < 520;
+      const mode = getFramingMode(width, height);
+      const isCompact = width < 520 || height < 520;
 
-        const scale = isCompact
+      // Responsive zoom level:
+      // Smaller divisor = larger model / closer face crop.
+      // Larger divisor = smaller model / more body visible.
+      const scale =
+        mode === "small"
+          ? height / 720
+          : mode === "medium"
             ? height / 900
             : height / 1200;
 
-        model.scale.set(scale);
+      model.scale.set(scale);
 
-        // Center horizontally.
-        model.x = width / 2;
+      // Keep the model centered for small and medium framing.
+      // Slightly shift it for the large/full-body view.
+      model.x =
+        mode === "large"
+          ? width * 0.48
+          : width / 2;
 
-        // Move the model down or up depending on available height.
-        // Smaller value moves the model upward.
-        model.y = isCompact
-            ? height * 2.4
-            : height * 2;
-        };
+      // This specific Kurisu model has an unusual internal origin
+      // and requires a large positive Y offset.
+      // Do not replace these values with conventional offsets.
+      model.y = isCompact
+        ? height * 2.4
+        : height * 2;
+    };
 
     const loadModel = async () => {
       if (!containerRef.current) return;
@@ -63,9 +89,12 @@ function Live2DViewer() {
       containerRef.current.appendChild(app.view);
 
       try {
-        model = await Live2DModel.from("/live2d/Kurisu/Kurisu.model3.json", {
-          autoInteract: false,
-        });
+        model = await Live2DModel.from(
+          "/live2d/Kurisu/Kurisu.model3.json",
+          {
+            autoInteract: false,
+          }
+        );
 
         if (destroyed || !app || !model) return;
 
@@ -89,9 +118,15 @@ function Live2DViewer() {
 
     return () => {
       destroyed = true;
+
       resizeObserver?.disconnect();
       model?.destroy();
-      app?.destroy(true, { children: true, texture: true, baseTexture: true });
+
+      app?.destroy(true, {
+        children: true,
+        texture: true,
+        baseTexture: true,
+      });
     };
   }, []);
 
