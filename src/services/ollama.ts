@@ -17,7 +17,10 @@ function convertMessages(messages: Message[]): OllamaMessage[] {
     }));
 }
 
-export async function sendMessage(messages: Message[]) {
+export async function streamMessage(
+  messages: Message[],
+  onToken: (token: string) => void
+) {
   const response = await fetch(OLLAMA_URL, {
     method: "POST",
     headers: {
@@ -26,14 +29,43 @@ export async function sendMessage(messages: Message[]) {
     body: JSON.stringify({
       model: "amadeus-kurisu",
       messages: convertMessages(messages),
-      stream: false,
+      stream: true,
     }),
   });
 
-  if (!response.ok) {
+  if (!response.ok || !response.body) {
     const errorText = await response.text();
-    throw new Error(errorText);
+    throw new Error(errorText || "Failed to communicate with Ollama");
   }
 
-  return await response.json();
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+
+      const parsed = JSON.parse(line);
+      const token = parsed.message?.content || "";
+
+      if (token) {
+        onToken(token);
+      }
+
+      if (parsed.done) {
+        return;
+      }
+    }
+  }
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { sendMessage } from "./services/ollama";
+import { streamMessage } from "./services/ollama";
 import type { Message } from "./types/message";
 import "./App.css";
 
@@ -34,31 +34,45 @@ const handleSend = async () => {
     text: input.trim(),
   };
 
-  const updatedMessages = [...messages, userMessage];
+  const placeholderReply: Message = {
+    sender: "amadeus",
+    text: "",
+  };
+
+  const updatedMessages = [...messages, userMessage, placeholderReply];
 
   setMessages(updatedMessages);
   setInput("");
   setLoading(true);
 
   try {
-    const response = await sendMessage(updatedMessages);
+    await streamMessage([...messages, userMessage], (token) => {
+      setMessages((prev) => {
+        const next = [...prev];
+        const lastIndex = next.length - 1;
 
-    const reply: Message = {
-      sender: "amadeus",
-      text: response.message.content,
-    };
+        next[lastIndex] = {
+          ...next[lastIndex],
+          text: next[lastIndex].text + token,
+        };
 
-    setMessages((prev) => [...prev, reply]);
+        return next;
+      });
+    });
   } catch (error) {
-    console.error("Ollama communication error:", error);
+    console.error("Ollama streaming error:", error);
 
-    setMessages((prev) => [
-      ...prev,
-      {
+    setMessages((prev) => {
+      const next = [...prev];
+      const lastIndex = next.length - 1;
+
+      next[lastIndex] = {
         sender: "amadeus",
         text: "Connection to the local cognitive system failed.",
-      },
-    ]);
+      };
+
+      return next;
+    });
   } finally {
     setLoading(false);
   }
