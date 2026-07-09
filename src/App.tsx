@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { streamMessage } from "./services/ollama";
+import { checkOllamaStatus, streamMessage } from "./services/ollama";
 import type { Message } from "./types/message";
 import "./App.css";
 
@@ -17,6 +17,7 @@ function App() {
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [brainOnline, setBrainOnline] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -27,6 +28,10 @@ function App() {
     });
   }, [messages, loading]);
 
+  useEffect(() => {
+    checkOllamaStatus().then(setBrainOnline);
+  }, []);
+
   const handleStop = () => {
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
@@ -34,7 +39,7 @@ function App() {
   };
 
   const handleSend = async () => {
-    if (!input.trim() || loading) return;
+    if (!input.trim() || loading || !brainOnline) return;
 
     const userMessage: Message = {
       sender: "user",
@@ -92,6 +97,7 @@ function App() {
     } finally {
       abortControllerRef.current = null;
       setLoading(false);
+      checkOllamaStatus().then(setBrainOnline);
     }
   };
 
@@ -107,18 +113,20 @@ function App() {
         <div className="system-card">
           <span className="status-dot" />
           <div>
-            <strong>{loading ? "Processing" : "System Online"}</strong>
-            <p>v0.3.4 Cognitive Link</p>
+            <strong>
+              {loading ? "Processing" : brainOnline ? "System Online" : "Brain Offline"}
+            </strong>
+            <p>v0.3.5 Cognitive Link</p>
           </div>
         </div>
       </header>
 
       <section className="status-strip">
-        <span>Brain: {loading ? "Thinking" : "Standby"}</span>
+        <span>Brain: {loading ? "Thinking" : brainOnline ? "Online" : "Offline"}</span>
         <span>Memory: Offline</span>
         <span>Voice: Offline</span>
         <span>Live2D: Placeholder</span>
-        <span>Model: amadeus-kurisu</span>
+        <span>Model: {brainOnline ? "amadeus-kurisu" : "Unavailable"}</span>
       </section>
 
       <section className="main-grid">
@@ -170,14 +178,18 @@ function App() {
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Send message to Amadeus..."
-              disabled={loading}
+              placeholder={
+                brainOnline
+                  ? "Send message to Amadeus..."
+                  : "Start Ollama to enable Amadeus..."
+              }
+              disabled={loading || !brainOnline}
             />
 
             <button
               type="button"
               onClick={loading ? handleStop : handleSend}
-              disabled={!loading && !input.trim()}
+              disabled={!loading && (!input.trim() || !brainOnline)}
             >
               {loading ? "Stop" : "Transmit"}
             </button>

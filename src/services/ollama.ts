@@ -1,6 +1,8 @@
 import type { Message } from "../types/message";
 
-const OLLAMA_URL = "http://localhost:11434/api/chat";
+const OLLAMA_CHAT_URL = "http://localhost:11434/api/chat";
+const OLLAMA_TAGS_URL = "http://localhost:11434/api/tags";
+const MODEL_NAME = "amadeus-kurisu:latest";
 
 type OllamaMessage = {
   role: "user" | "assistant";
@@ -9,7 +11,10 @@ type OllamaMessage = {
 
 function convertMessages(messages: Message[]): OllamaMessage[] {
   return messages
-    .filter((message) => !message.text.includes("AMADEUS cognitive interface initialized."))
+    .filter(
+      (message) =>
+        !message.text.includes("AMADEUS cognitive interface initialized.")
+    )
     .filter((message) => !message.text.includes("Local systems are online."))
     .map((message) => ({
       role: message.sender === "user" ? "user" : "assistant",
@@ -17,12 +22,30 @@ function convertMessages(messages: Message[]): OllamaMessage[] {
     }));
 }
 
+export async function checkOllamaStatus() {
+  try {
+    const response = await fetch(OLLAMA_TAGS_URL);
+
+    if (!response.ok) {
+      return false;
+    }
+
+    const data = await response.json();
+
+    return data.models?.some(
+      (model: { name: string }) => model.name === MODEL_NAME
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function streamMessage(
   messages: Message[],
   onToken: (token: string) => void,
   signal?: AbortSignal
 ) {
-  const response = await fetch(OLLAMA_URL, {
+  const response = await fetch(OLLAMA_CHAT_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
