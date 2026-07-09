@@ -18,41 +18,43 @@ function App() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSend = async () => {
-    if (!input.trim() || loading) return;
+const handleSend = async () => {
+  if (!input.trim() || loading) return;
 
-    const userMessage: Message = {
-      sender: "user",
-      text: input.trim(),
+  const userMessage: Message = {
+    sender: "user",
+    text: input.trim(),
+  };
+
+  const updatedMessages = [...messages, userMessage];
+
+  setMessages(updatedMessages);
+  setInput("");
+  setLoading(true);
+
+  try {
+    const response = await sendMessage(updatedMessages);
+
+    const reply: Message = {
+      sender: "amadeus",
+      text: response.message.content,
     };
 
-    setMessages((prev) => [...prev, userMessage]);
-    setInput("");
-    setLoading(true);
+    setMessages((prev) => [...prev, reply]);
+  } catch (error) {
+    console.error("Ollama communication error:", error);
 
-    try {
-      const response = await sendMessage(userMessage.text);
-
-      const reply: Message = {
+    setMessages((prev) => [
+      ...prev,
+      {
         sender: "amadeus",
-        text: response.message.content,
-      };
-
-      setMessages((prev) => [...prev, reply]);
-    } catch (error) {
-      console.error("Ollama communication error:", error);
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          sender: "amadeus",
-          text: "Connection to the local cognitive system failed.",
-        },
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  };
+        text: "Connection to the local cognitive system failed.",
+      },
+    ]);
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <main className="app-shell">
