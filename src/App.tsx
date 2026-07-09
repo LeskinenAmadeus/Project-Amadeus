@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { sendMessage } from "./services/ollama";
 import type { Message } from "./types/message";
 import "./App.css";
@@ -17,6 +17,14 @@ function App() {
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+
+const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+useEffect(() => {
+  messagesEndRef.current?.scrollIntoView({
+    behavior: "smooth",
+  });
+}, [messages, loading]);
 
 const handleSend = async () => {
   if (!input.trim() || loading) return;
@@ -109,17 +117,19 @@ const handleSend = async () => {
                 <strong>
                   {message.sender === "user" ? "Operator" : "Amadeus"}
                 </strong>
-                <p>{message.text}</p>
-              </div>
-            ))}
+              <p>{message.text}</p>
+            </div>
+          ))}
 
-            {loading && (
-              <div className="message amadeus">
-                <strong>Amadeus</strong>
-                <p>Analyzing input...</p>
-              </div>
-            )}
-          </div>
+          {loading && (
+            <div className="message amadeus">
+              <strong>Amadeus</strong>
+              <p>Analyzing input...</p>
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
+        </div>
 
           <form
             className="input-row"
