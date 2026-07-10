@@ -10,7 +10,7 @@
 }
 
 .setup-panel {
-  width: min(600px, 100%);
+  width: min(640px, 100%);
   max-height: calc(100vh - 48px);
   overflow-y: auto;
   border: 1px solid rgba(87, 210, 255, 0.44);
@@ -79,6 +79,10 @@
   gap: 7px;
 }
 
+.setup-status-wide {
+  grid-column: 1 / -1;
+}
+
 .setup-status-item span {
   color: #94b8c9;
   font-size: 0.8rem;
@@ -86,6 +90,7 @@
 
 .setup-status-item strong {
   font-size: 1rem;
+  overflow-wrap: anywhere;
 }
 
 .setup-ready {
@@ -128,27 +133,109 @@
     monospace;
 }
 
-.setup-retry-button {
-  align-self: flex-end;
+.setup-operation {
+  padding: 15px 16px;
+  border: 1px solid rgba(87, 210, 255, 0.24);
+  border-radius: 13px;
+  background: rgba(37, 208, 255, 0.07);
+  color: #bceeff;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  line-height: 1.45;
+}
+
+.setup-spinner {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  border: 2px solid rgba(87, 210, 255, 0.22);
+  border-top-color: #57d2ff;
+  border-radius: 999px;
+  animation: setup-spin 0.85s linear infinite;
+}
+
+@keyframes setup-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.setup-error {
+  padding: 15px 16px;
+  border: 1px solid rgba(255, 94, 114, 0.44);
+  border-radius: 13px;
+  background: rgba(255, 94, 114, 0.08);
+}
+
+.setup-error strong {
+  color: #ff8795;
+}
+
+.setup-error p {
+  margin: 6px 0 0;
+  color: #efb4bb;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.setup-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.setup-primary-button,
+.setup-secondary-button {
   padding: 11px 20px;
-  border: none;
   border-radius: 12px;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.setup-primary-button {
+  border: none;
   background: linear-gradient(
     135deg,
     #25d0ff,
     #6de6ff
   );
   color: #021018;
-  cursor: pointer;
-  font-weight: 800;
 }
 
-.setup-retry-button:hover {
+.setup-secondary-button {
+  border: 1px solid rgba(143, 234, 255, 0.28);
+  background: rgba(2, 8, 18, 0.74);
+  color: #8feaff;
+}
+
+.setup-primary-button:hover:not(:disabled),
+.setup-secondary-button:hover:not(:disabled) {
   filter: brightness(1.08);
+}
+
+.setup-primary-button:disabled,
+.setup-secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
 }
 
 @media (max-width: 620px) {
   .setup-status-grid {
     grid-template-columns: 1fr;
+  }
+
+  .setup-status-wide {
+    grid-column: auto;
+  }
+
+  .setup-actions {
+    flex-direction: column;
+  }
+
+  .setup-primary-button,
+  .setup-secondary-button {
+    width: 100%;
   }
 }

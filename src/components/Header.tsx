@@ -50,7 +50,7 @@ function Header({
                   : "Brain Offline"}
             </strong>
 
-            <p>v0.5.3</p>
+            <p>v0.6.0</p>
           </div>
         </div>
       </div>
