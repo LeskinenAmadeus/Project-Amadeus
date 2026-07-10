@@ -1,19 +1,11 @@
+import {
+  Channel,
+  invoke,
+} from "@tauri-apps/api/core";
 import type { Message } from "../types/message";
-
-const OLLAMA_CHAT_URL =
-  "http://localhost:11434/api/chat";
-
-const OLLAMA_TAGS_URL =
-  "http://localhost:11434/api/tags";
-
-const STATUS_TIMEOUT_MS = 5000;
-const CHAT_CONNECTION_TIMEOUT_MS = 15000;
 
 export const REQUIRED_MODEL_NAME =
   "amadeus-kurisu";
-
-const REQUIRED_MODEL_TAG =
-  `${REQUIRED_MODEL_NAME}:latest`;
 
 export type OllamaStatus =
   | "checking"
@@ -58,21 +50,11 @@ type OllamaMessage = {
   content: string;
 };
 
-type OllamaModel = {
-  name: string;
-};
-
-type OllamaTagsResponse = {
-  models?: OllamaModel[];
-};
-
-type OllamaStreamResponse = {
-  message?: {
-    role?: string;
-    content?: string;
+type OllamaStreamEvent = {
+  event: "token";
+  data: {
+    token: string;
   };
-  done?: boolean;
-  error?: string;
 };
 
 function convertMessages(
@@ -92,7 +74,8 @@ function convertMessages(
         )
     )
     .filter(
-      (message) => message.text.trim().length > 0
+      (message) =>
+        message.text.trim().length > 0
     )
     .map((message) => ({
       role:
@@ -103,155 +86,126 @@ function convertMessages(
     }));
 }
 
-function modelExists(
-  models: OllamaModel[] | undefined
-): boolean {
+function getErrorText(
+  error: unknown
+): string {
+  if (typeof error === "string") {
+    return error;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
   return (
-    models?.some(
-      (model) =>
-        model.name === REQUIRED_MODEL_NAME ||
-        model.name === REQUIRED_MODEL_TAG
-    ) ?? false
+    "The local cognitive system failed " +
+    "unexpectedly."
   );
 }
 
-function createTimeoutController(
-  timeoutMs: number,
-  externalSignal?: AbortSignal
-): {
-  controller: AbortController;
-  clear: () => void;
-} {
-  const controller = new AbortController();
-
-  const handleExternalAbort = () => {
-    controller.abort(
-      externalSignal?.reason ??
-        new DOMException(
-          "The request was stopped.",
-          "AbortError"
-        )
-    );
-  };
-
-  if (externalSignal) {
-    if (externalSignal.aborted) {
-      handleExternalAbort();
-    } else {
-      externalSignal.addEventListener(
-        "abort",
-        handleExternalAbort,
-        { once: true }
-      );
-    }
-  }
-
-  const timeoutId = window.setTimeout(() => {
-    controller.abort(
-      new DOMException(
-        "The request timed out.",
-        "TimeoutError"
-      )
-    );
-  }, timeoutMs);
-
-  return {
-    controller,
-    clear: () => {
-      window.clearTimeout(timeoutId);
-
-      externalSignal?.removeEventListener(
-        "abort",
-        handleExternalAbort
-      );
-    },
-  };
-}
-
-function parseStreamLine(
-  line: string
-): OllamaStreamResponse {
-  try {
-    return JSON.parse(line) as OllamaStreamResponse;
-  } catch {
-    throw new OllamaRequestError(
-      "malformed-stream",
-      "Ollama returned malformed response data."
-    );
-  }
-}
-
-function detectRequestError(
-  statusCode: number,
-  responseText: string
+function parseRustError(
+  error: unknown
 ): OllamaRequestError {
-  const normalizedText =
-    responseText.toLowerCase();
+  const message = getErrorText(error);
+
+  if (message === "ABORTED") {
+    throw new DOMException(
+      "The request was stopped.",
+      "AbortError"
+    );
+  }
+
+  if (message.startsWith("OFFLINE:")) {
+    return new OllamaRequestError(
+      "offline",
+      message
+        .replace("OFFLINE:", "")
+        .trim()
+    );
+  }
 
   if (
-    statusCode === 404 ||
-    normalizedText.includes("model") &&
-      normalizedText.includes("not found")
+    message.startsWith("MODEL_MISSING:")
   ) {
     return new OllamaRequestError(
       "model-missing",
-      `The required Ollama model "${REQUIRED_MODEL_NAME}" was not found.`,
-      statusCode
+      message
+        .replace("MODEL_MISSING:", "")
+        .trim()
+    );
+  }
+
+  if (message.startsWith("TIMEOUT:")) {
+    return new OllamaRequestError(
+      "timeout",
+      message
+        .replace("TIMEOUT:", "")
+        .trim()
+    );
+  }
+
+  if (
+    message.startsWith("MALFORMED_STREAM:")
+  ) {
+    return new OllamaRequestError(
+      "malformed-stream",
+      message
+        .replace("MALFORMED_STREAM:", "")
+        .trim()
+    );
+  }
+
+  if (
+    message.startsWith("EMPTY_RESPONSE:")
+  ) {
+    return new OllamaRequestError(
+      "empty-response",
+      message
+        .replace("EMPTY_RESPONSE:", "")
+        .trim()
+    );
+  }
+
+  if (
+    message.startsWith(
+      "STREAM_INTERRUPTED:"
+    )
+  ) {
+    return new OllamaRequestError(
+      "stream-interrupted",
+      message
+        .replace(
+          "STREAM_INTERRUPTED:",
+          ""
+        )
+        .trim()
     );
   }
 
   return new OllamaRequestError(
     "request-failed",
-    responseText.trim() ||
-      `Ollama returned HTTP status ${statusCode}.`,
-    statusCode
+    message
+      .replace("REQUEST_FAILED:", "")
+      .trim()
   );
 }
 
 export async function checkOllamaSystemStatus(): Promise<OllamaSystemStatus> {
-  const { controller, clear } =
-    createTimeoutController(STATUS_TIMEOUT_MS);
-
   try {
-    const response = await fetch(
-      OLLAMA_TAGS_URL,
-      {
-        signal: controller.signal,
-      }
+    return await invoke<OllamaSystemStatus>(
+      "check_ollama_system_status"
+    );
+  } catch (error: unknown) {
+    console.error(
+      "Unable to check Ollama system status:",
+      error
     );
 
-    if (!response.ok) {
-      return {
-        status: "offline",
-        ollamaOnline: false,
-        modelAvailable: false,
-      };
-    }
-
-    const data =
-      (await response.json()) as OllamaTagsResponse;
-
-    if (!modelExists(data.models)) {
-      return {
-        status: "model-missing",
-        ollamaOnline: true,
-        modelAvailable: false,
-      };
-    }
-
-    return {
-      status: "ready",
-      ollamaOnline: true,
-      modelAvailable: true,
-    };
-  } catch {
     return {
       status: "offline",
       ollamaOnline: false,
       modelAvailable: false,
     };
-  } finally {
-    clear();
   }
 }
 
@@ -315,8 +269,9 @@ export function getOllamaUserMessage(
     case "request-failed":
     default:
       return (
+        error.message ||
         "Ollama rejected the request. Check the local " +
-        "model and try again."
+          "model and try again."
       );
   }
 }
@@ -326,40 +281,66 @@ export async function streamMessage(
   onToken: (token: string) => void,
   signal?: AbortSignal
 ): Promise<void> {
-  const { controller, clear } =
-    createTimeoutController(
-      CHAT_CONNECTION_TIMEOUT_MS,
-      signal
-    );
+  const requestId = crypto.randomUUID();
 
-  let response: Response;
+  const onEvent =
+    new Channel<OllamaStreamEvent>();
+
+  let receivedContent = false;
+
+  onEvent.onmessage = (
+    message: OllamaStreamEvent
+  ) => {
+    if (
+      message.event !== "token" ||
+      typeof message.data?.token !== "string" ||
+      message.data.token.length === 0
+    ) {
+      return;
+    }
+
+    receivedContent = true;
+    onToken(message.data.token);
+  };
+
+  const cancelRequest = () => {
+    void invoke("cancel_ollama_stream", {
+      requestId,
+    }).catch((error: unknown) => {
+      console.error(
+        "Unable to cancel Ollama stream:",
+        error
+      );
+    });
+  };
+
+  if (signal?.aborted) {
+    cancelRequest();
+
+    throw new DOMException(
+      "The request was stopped.",
+      "AbortError"
+    );
+  }
+
+  signal?.addEventListener(
+    "abort",
+    cancelRequest,
+    { once: true }
+  );
 
   try {
-    response = await fetch(
-      OLLAMA_CHAT_URL,
+    await invoke<void>(
+      "stream_ollama_message",
       {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        signal: controller.signal,
-        body: JSON.stringify({
-          model: REQUIRED_MODEL_NAME,
-          messages: convertMessages(messages),
-          stream: true,
-        }),
+        requestId,
+        messages: convertMessages(messages),
+        onEvent,
       }
     );
-  } catch (error: unknown) {
-    clear();
 
     if (
-      signal?.aborted ||
-      (
-        error instanceof DOMException &&
-        error.name === "AbortError" &&
-        signal?.aborted
-      )
+      signal?.aborted
     ) {
       throw new DOMException(
         "The request was stopped.",
@@ -367,126 +348,11 @@ export async function streamMessage(
       );
     }
 
-    if (
-      controller.signal.reason instanceof DOMException &&
-      controller.signal.reason.name === "TimeoutError"
-    ) {
+    if (!receivedContent) {
       throw new OllamaRequestError(
-        "timeout",
-        "Ollama did not respond before the connection timeout."
+        "empty-response",
+        "Ollama completed without returning response content."
       );
-    }
-
-    throw new OllamaRequestError(
-      "offline",
-      "Unable to connect to the local Ollama service."
-    );
-  }
-
-  clear();
-
-  if (!response.ok) {
-    const errorText =
-      await response.text();
-
-    throw detectRequestError(
-      response.status,
-      errorText
-    );
-  }
-
-  if (!response.body) {
-    throw new OllamaRequestError(
-      "stream-interrupted",
-      "Ollama returned no readable response stream."
-    );
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-
-  let buffer = "";
-  let receivedContent = false;
-  let receivedDoneSignal = false;
-
-  const processLine = (line: string) => {
-    const trimmedLine = line.trim();
-
-    if (!trimmedLine) {
-      return;
-    }
-
-    const parsed =
-      parseStreamLine(trimmedLine);
-
-    if (parsed.error) {
-      const normalizedError =
-        parsed.error.toLowerCase();
-
-      if (
-        normalizedError.includes("model") &&
-        normalizedError.includes("not found")
-      ) {
-        throw new OllamaRequestError(
-          "model-missing",
-          parsed.error
-        );
-      }
-
-      throw new OllamaRequestError(
-        "request-failed",
-        parsed.error
-      );
-    }
-
-    const token =
-      parsed.message?.content;
-
-    if (
-      typeof token === "string" &&
-      token.length > 0
-    ) {
-      receivedContent = true;
-      onToken(token);
-    }
-
-    if (parsed.done === true) {
-      receivedDoneSignal = true;
-    }
-  };
-
-  try {
-    while (!receivedDoneSignal) {
-      const { done, value } =
-        await reader.read();
-
-      if (done) {
-        break;
-      }
-
-      buffer += decoder.decode(value, {
-        stream: true,
-      });
-
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-
-      for (const line of lines) {
-        processLine(line);
-
-        if (receivedDoneSignal) {
-          break;
-        }
-      }
-    }
-
-    buffer += decoder.decode();
-
-    if (
-      !receivedDoneSignal &&
-      buffer.trim()
-    ) {
-      processLine(buffer);
     }
   } catch (error: unknown) {
     if (
@@ -506,25 +372,11 @@ export async function streamMessage(
       throw error;
     }
 
-    throw new OllamaRequestError(
-      "stream-interrupted",
-      "The Ollama response stream was interrupted."
-    );
+    throw parseRustError(error);
   } finally {
-    reader.releaseLock();
-  }
-
-  if (!receivedDoneSignal) {
-    throw new OllamaRequestError(
-      "stream-interrupted",
-      "The Ollama response ended before completion."
-    );
-  }
-
-  if (!receivedContent) {
-    throw new OllamaRequestError(
-      "empty-response",
-      "Ollama completed without returning response content."
+    signal?.removeEventListener(
+      "abort",
+      cancelRequest
     );
   }
 }
