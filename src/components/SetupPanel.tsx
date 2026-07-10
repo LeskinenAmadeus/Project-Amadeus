@@ -6,7 +6,7 @@ import "./SetupPanel.css";
 
 type SetupPanelProps = {
   systemStatus: OllamaSystemStatus;
-  onRetry: () => void;
+  onRetry: () => Promise<OllamaSystemStatus>;
 };
 
 function SetupPanel({
@@ -21,6 +21,10 @@ function SetupPanel({
 
   const isModelMissing =
     systemStatus.status === "model-missing";
+
+  const handleRetry = () => {
+    void onRetry();
+  };
 
   return (
     <div className="setup-backdrop">
@@ -47,7 +51,7 @@ function SetupPanel({
             {isChecking
               ? "Amadeus is checking the local cognitive system."
               : isOllamaOffline
-                ? "Amadeus could not connect to Ollama on this computer."
+                ? "Amadeus could not connect to the local Ollama service."
                 : `Ollama is online, but the required ${REQUIRED_MODEL_NAME} model was not found.`}
           </p>
         </header>
@@ -93,23 +97,25 @@ function SetupPanel({
 
           {isOllamaOffline && (
             <div className="setup-instructions">
-              <h3>What you need</h3>
+              <h3>Start the local AI service</h3>
 
               <p>
                 Ollama must be installed and running
-                locally before Amadeus can respond.
+                before Amadeus can respond.
               </p>
 
               <p>
-                After starting Ollama, return here and
-                retry the system check.
+                Start Ollama, wait a few seconds, then
+                select Retry System Check.
               </p>
+
+              <code>ollama serve</code>
             </div>
           )}
 
           {isModelMissing && (
             <div className="setup-instructions">
-              <h3>Required model</h3>
+              <h3>Restore the required model</h3>
 
               <p>
                 Amadeus expects this local Ollama model:
@@ -118,11 +124,8 @@ function SetupPanel({
               <code>{REQUIRED_MODEL_NAME}</code>
 
               <p>
-                For the first alpha, testers will need
-                instructions for creating this custom
-                model from the Amadeus Modelfile. We
-                will prepare those instructions during
-                release preparation.
+                Create the model using the Amadeus
+                Modelfile, then retry the system check.
               </p>
             </div>
           )}
@@ -131,7 +134,7 @@ function SetupPanel({
             <button
               className="setup-retry-button"
               type="button"
-              onClick={onRetry}
+              onClick={handleRetry}
             >
               Retry System Check
             </button>

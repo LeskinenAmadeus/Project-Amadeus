@@ -24,6 +24,8 @@ import {
 } from "./services/settings";
 import {
   checkOllamaSystemStatus,
+  getOllamaUserMessage,
+  OllamaRequestError,
   streamMessage,
   type OllamaSystemStatus,
 } from "./services/ollama";
@@ -149,8 +151,10 @@ function detectExpression(
 
       if (
         index !== -1 &&
-        (!latestMatch ||
-          index > latestMatch.index)
+        (
+          !latestMatch ||
+          index > latestMatch.index
+        )
       ) {
         latestMatch = {
           expression: rule.expression,
@@ -259,6 +263,30 @@ function App() {
     });
   };
 
+  const replaceLastResponse = (
+    text: string
+  ) => {
+    setMessages((previousMessages) => {
+      const nextMessages = [
+        ...previousMessages,
+      ];
+
+      const lastIndex =
+        nextMessages.length - 1;
+
+      if (lastIndex < 0) {
+        return previousMessages;
+      }
+
+      nextMessages[lastIndex] = {
+        sender: "amadeus",
+        text,
+      };
+
+      return nextMessages;
+    });
+  };
+
   const startTokenDisplayQueue = (
     delayMs: number
   ) => {
@@ -309,8 +337,10 @@ function App() {
   ) => {
     while (
       !signal.aborted &&
-      (tokenQueueRef.current.length > 0 ||
-        tokenIntervalRef.current !== null)
+      (
+        tokenQueueRef.current.length > 0 ||
+        tokenIntervalRef.current !== null
+      )
     ) {
       await new Promise<void>((resolve) => {
         window.setTimeout(resolve, 20);
@@ -318,16 +348,19 @@ function App() {
     }
   };
 
-  const refreshSystemStatus = async () => {
-    setSystemStatus(INITIAL_SYSTEM_STATUS);
+  const refreshSystemStatus =
+    async (): Promise<OllamaSystemStatus> => {
+      setSystemStatus(
+        INITIAL_SYSTEM_STATUS
+      );
 
-    const nextStatus =
-      await checkOllamaSystemStatus();
+      const nextStatus =
+        await checkOllamaSystemStatus();
 
-    setSystemStatus(nextStatus);
+      setSystemStatus(nextStatus);
 
-    return nextStatus;
-  };
+      return nextStatus;
+    };
 
   useEffect(() => {
     if (!settings.autoScroll) {
@@ -348,7 +381,7 @@ function App() {
   }, [settings]);
 
   useEffect(() => {
-    refreshSystemStatus();
+    void refreshSystemStatus();
   }, []);
 
   useEffect(() => {
@@ -384,7 +417,7 @@ function App() {
         }
       };
 
-    restoreConversationHistory();
+    void restoreConversationHistory();
 
     return () => {
       cancelled = true;
@@ -557,12 +590,16 @@ function App() {
 
     setActiveMotion("Focused Stare");
 
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
+    const controller =
+      new AbortController();
 
-    const responseDelay = getResponseDelay(
-      settings.responseSpeed
-    );
+    abortControllerRef.current =
+      controller;
+
+    const responseDelay =
+      getResponseDelay(
+        settings.responseSpeed
+      );
 
     let replyText = "";
 
@@ -604,7 +641,7 @@ function App() {
       );
     } catch (error: unknown) {
       if (
-        error instanceof Error &&
+        error instanceof DOMException &&
         error.name === "AbortError"
       ) {
         return;
@@ -624,38 +661,39 @@ function App() {
 
       setActiveMotion("Sleepy");
 
-      setMessages((previousMessages) => {
-        const nextMessages = [
-          ...previousMessages,
-        ];
+      replaceLastResponse(
+        getOllamaUserMessage(error)
+      );
 
-        const lastIndex =
-          nextMessages.length - 1;
-
-        if (lastIndex < 0) {
-          return previousMessages;
+      if (
+        error instanceof OllamaRequestError
+      ) {
+        if (error.code === "offline") {
+          setSystemStatus({
+            status: "offline",
+            ollamaOnline: false,
+            modelAvailable: false,
+          });
+        } else if (
+          error.code === "model-missing"
+        ) {
+          setSystemStatus({
+            status: "model-missing",
+            ollamaOnline: true,
+            modelAvailable: false,
+          });
+        } else {
+          await refreshSystemStatus();
         }
-
-        nextMessages[lastIndex] = {
-          sender: "amadeus",
-          text:
-            "Connection to the local cognitive system failed.",
-        };
-
-        return nextMessages;
-      });
-
-      await refreshSystemStatus();
+      } else {
+        await refreshSystemStatus();
+      }
     } finally {
       abortControllerRef.current = null;
       setLoading(false);
 
       if (!controller.signal.aborted) {
         setActiveMotion("Idle Loop");
-      }
-
-      if (brainOnline) {
-        refreshSystemStatus();
       }
     }
   };
