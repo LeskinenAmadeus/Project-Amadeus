@@ -1,0 +1,179 @@
+.settings-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 3, 10, 0.76);
+  backdrop-filter: blur(8px);
+}
+
+.settings-panel {
+  width: min(560px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border: 1px solid rgba(87, 210, 255, 0.42);
+  border-radius: 22px;
+  background:
+    radial-gradient(
+      circle at 90% 0%,
+      rgba(95, 71, 255, 0.16),
+      transparent 36%
+    ),
+    linear-gradient(
+      145deg,
+      rgba(8, 19, 35, 0.98),
+      rgba(2, 7, 16, 0.98)
+    );
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.56),
+    0 0 44px rgba(0, 190, 255, 0.12),
+    inset 0 0 38px rgba(0, 180, 255, 0.04);
+}
+
+.settings-header {
+  padding: 22px 24px;
+  border-bottom: 1px solid rgba(87, 210, 255, 0.18);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.settings-eyebrow {
+  color: #57d2ff;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.2em;
+}
+
+.settings-header h2 {
+  margin: 6px 0 0;
+  color: #e7f6ff;
+  font-size: 1.55rem;
+}
+
+.settings-close-button {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid rgba(143, 234, 255, 0.24);
+  border-radius: 12px;
+  background: rgba(2, 8, 18, 0.72);
+  color: #9fc8d8;
+  font-size: 1.7rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.settings-close-button:hover {
+  color: #e7f6ff;
+  border-color: rgba(87, 210, 255, 0.68);
+  background: rgba(12, 35, 52, 0.92);
+}
+
+.settings-content {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.settings-field,
+.settings-toggle-row {
+  padding: 17px 18px;
+  border: 1px solid rgba(143, 234, 255, 0.16);
+  border-radius: 16px;
+  background: rgba(0, 145, 190, 0.07);
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  cursor: pointer;
+}
+
+.settings-toggle-row > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-field-title {
+  color: #e7f6ff;
+  font-weight: 700;
+}
+
+.settings-field-description {
+  margin-top: 5px;
+  color: #94b8c9;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.settings-field select {
+  margin-top: 14px;
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid rgba(143, 234, 255, 0.28);
+  border-radius: 11px;
+  outline: none;
+  background: #071321;
+  color: #e7f6ff;
+  cursor: pointer;
+}
+
+.settings-field select:focus {
+  border-color: rgba(31, 199, 255, 0.82);
+  box-shadow: 0 0 0 3px rgba(31, 199, 255, 0.1);
+}
+
+.settings-toggle-row input {
+  width: 21px;
+  height: 21px;
+  flex: 0 0 auto;
+  accent-color: #25d0ff;
+  cursor: pointer;
+}
+
+.settings-note {
+  padding: 13px 15px;
+  border-left: 3px solid rgba(87, 210, 255, 0.62);
+  border-radius: 8px;
+  background: rgba(87, 210, 255, 0.06);
+  color: #94b8c9;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.settings-footer {
+  padding: 18px 24px;
+  border-top: 1px solid rgba(87, 210, 255, 0.18);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.settings-done-button {
+  padding: 10px 24px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(
+    135deg,
+    #25d0ff,
+    #6de6ff
+  );
+  color: #021018;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.settings-done-button:hover {
+  filter: brightness(1.08);
+}
