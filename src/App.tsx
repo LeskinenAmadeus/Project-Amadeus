@@ -8,6 +8,7 @@ import ChatPanel from "./components/ChatPanel";
 import Header from "./components/Header";
 import InputBar from "./components/InputBar";
 import SettingsPanel from "./components/SettingsPanel";
+import SetupPanel from "./components/SetupPanel";
 import StatusStrip from "./components/StatusStrip";
 import {
   DEFAULT_MESSAGES,
@@ -22,8 +23,9 @@ import {
   saveAppSettings,
 } from "./services/settings";
 import {
-  checkOllamaStatus,
+  checkOllamaSystemStatus,
   streamMessage,
+  type OllamaSystemStatus,
 } from "./services/ollama";
 import type {
   ConversationStore,
@@ -35,6 +37,12 @@ import "./App.css";
 export type ExpressionCommand = {
   name: string;
   id: number;
+};
+
+const INITIAL_SYSTEM_STATUS: OllamaSystemStatus = {
+  status: "checking",
+  ollamaOnline: false,
+  modelAvailable: false,
 };
 
 function detectExpression(
@@ -136,11 +144,13 @@ function detectExpression(
 
   for (const rule of emotionRules) {
     for (const keyword of rule.keywords) {
-      const index = response.lastIndexOf(keyword);
+      const index =
+        response.lastIndexOf(keyword);
 
       if (
         index !== -1 &&
-        (!latestMatch || index > latestMatch.index)
+        (!latestMatch ||
+          index > latestMatch.index)
       ) {
         latestMatch = {
           expression: rule.expression,
@@ -161,7 +171,9 @@ function App() {
     useState<ConversationStore | null>(null);
 
   const [settings, setSettings] =
-    useState<AppSettings>(() => loadAppSettings());
+    useState<AppSettings>(() =>
+      loadAppSettings()
+    );
 
   const [settingsOpen, setSettingsOpen] =
     useState(false);
@@ -171,8 +183,11 @@ function App() {
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [brainOnline, setBrainOnline] =
-    useState(false);
+
+  const [systemStatus, setSystemStatus] =
+    useState<OllamaSystemStatus>(
+      INITIAL_SYSTEM_STATUS
+    );
 
   const [
     activeExpression,
@@ -200,10 +215,11 @@ function App() {
   const tokenQueueRef =
     useRef<string[]>([]);
 
-  // Prevent the same detected expression from
-  // restarting on every streamed token.
   const lastTriggeredExpressionRef =
     useRef<string | null>(null);
+
+  const brainOnline =
+    systemStatus.status === "ready";
 
   const clearTokenQueue = () => {
     tokenQueueRef.current = [];
@@ -217,10 +233,16 @@ function App() {
     }
   };
 
-  const appendResponseToken = (token: string) => {
+  const appendResponseToken = (
+    token: string
+  ) => {
     setMessages((previousMessages) => {
-      const nextMessages = [...previousMessages];
-      const lastIndex = nextMessages.length - 1;
+      const nextMessages = [
+        ...previousMessages,
+      ];
+
+      const lastIndex =
+        nextMessages.length - 1;
 
       if (lastIndex < 0) {
         return previousMessages;
@@ -296,6 +318,17 @@ function App() {
     }
   };
 
+  const refreshSystemStatus = async () => {
+    setSystemStatus(INITIAL_SYSTEM_STATUS);
+
+    const nextStatus =
+      await checkOllamaSystemStatus();
+
+    setSystemStatus(nextStatus);
+
+    return nextStatus;
+  };
+
   useEffect(() => {
     if (!settings.autoScroll) {
       return;
@@ -315,7 +348,7 @@ function App() {
   }, [settings]);
 
   useEffect(() => {
-    checkOllamaStatus().then(setBrainOnline);
+    refreshSystemStatus();
   }, []);
 
   useEffect(() => {
@@ -335,6 +368,7 @@ function App() {
             getActiveConversation(loadedStore);
 
           setConversationStore(loadedStore);
+
           setMessages(
             activeConversation.messages
           );
@@ -610,6 +644,8 @@ function App() {
 
         return nextMessages;
       });
+
+      await refreshSystemStatus();
     } finally {
       abortControllerRef.current = null;
       setLoading(false);
@@ -618,9 +654,9 @@ function App() {
         setActiveMotion("Idle Loop");
       }
 
-      checkOllamaStatus().then(
-        setBrainOnline
-      );
+      if (brainOnline) {
+        refreshSystemStatus();
+      }
     }
   };
 
@@ -636,7 +672,7 @@ function App() {
 
       <StatusStrip
         loading={loading}
-        brainOnline={brainOnline}
+        systemStatus={systemStatus}
       />
 
       <section className="main-grid">
@@ -673,6 +709,13 @@ function App() {
           onClose={() =>
             setSettingsOpen(false)
           }
+        />
+      )}
+
+      {systemStatus.status !== "ready" && (
+        <SetupPanel
+          systemStatus={systemStatus}
+          onRetry={refreshSystemStatus}
         />
       )}
     </main>
