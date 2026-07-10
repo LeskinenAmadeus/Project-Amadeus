@@ -22,6 +22,14 @@ const EXPRESSIONS = [
   "Stanby Surprised",
 ];
 
+const MOTIONS = [
+  { label: "Idle Loop", group: "Idle", index: 0 },
+  { label: "Head Movement", group: "TapHead", index: 0 },
+  { label: "Sleepy", group: "TapBody", index: 0 },
+  { label: "Focused Stare", group: "Special", index: 0 },
+  { label: "Penguin Sway", group: "Special", index: 1 },
+];
+
 type Live2DViewerProps = {
   activeExpression: string | null;
 };
@@ -36,6 +44,13 @@ function Live2DViewer({ activeExpression }: Live2DViewerProps) {
 
     model.expression(expressionName);
   };
+
+  const startMotion = (group: string, index: number) => {
+  const model = modelRef.current;
+  if (!model) return;
+
+  model.motion(group, index);
+};
 
   useEffect(() => {
     if (!activeExpression) return;
@@ -158,6 +173,17 @@ function Live2DViewer({ activeExpression }: Live2DViewerProps) {
             {expression}
           </button>
         ))}
+      </div>
+      <div className="motion-controls">
+        {MOTIONS.map((motion) => (
+          <button
+            key={motion.label}
+            type="button"
+            onClick={() => startMotion(motion.group, motion.index)}
+           >
+              {motion.label}
+          </button>
+         ))}
       </div>
     </div>
   );

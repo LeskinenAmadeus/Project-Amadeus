@@ -352,3 +352,36 @@ input {
   border-color: rgba(80, 210, 255, 0.8);
   background: rgba(10, 35, 52, 0.95);
 }
+
+.motion-controls {
+  position: absolute;
+  left: 10px;
+  bottom: 82px;
+  right: 10px;
+  z-index: 3;
+
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  padding: 8px;
+
+  border: 1px solid rgba(255, 196, 87, 0.25);
+  border-radius: 10px;
+  background: rgba(22, 12, 3, 0.82);
+  backdrop-filter: blur(6px);
+}
+
+.motion-controls button {
+  background: rgba(35, 22, 8, 0.95);
+  color: #ffd78f;
+  border: 1px solid rgba(255, 196, 87, 0.45);
+  border-radius: 8px;
+  padding: 5px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.motion-controls button:hover {
+  border-color: rgba(255, 196, 87, 0.85);
+  background: rgba(52, 35, 10, 0.95);
+}
