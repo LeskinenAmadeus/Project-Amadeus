@@ -242,43 +242,9 @@ function Live2DViewer({
   }, []);
 
   return (
-    <div className="live2d-viewer">
-      <div
-        ref={containerRef}
-        className="live2d-container"
-      />
-
-      <div className="expression-controls">
-        {EXPRESSIONS.map((expression) => (
-          <button
-            key={expression}
-            type="button"
-            onClick={() =>
-              setExpression(expression)
-            }
-          >
-            {expression}
-          </button>
-        ))}
-      </div>
-
-      <div className="motion-controls">
-        {MOTIONS.map((motion) => (
-          <button
-            key={motion.label}
-            type="button"
-            onClick={() =>
-              startMotion(
-                motion.group,
-                motion.index
-              )
-            }
-          >
-            {motion.label}
-          </button>
-        ))}
-      </div>
-    </div>
+  <div className="live2d-viewer">
+    <div ref={containerRef} className="live2d-container" />
+  </div>
   );
 }
 
