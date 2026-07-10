@@ -4,8 +4,18 @@ import ChatPanel from "./components/ChatPanel";
 import Header from "./components/Header";
 import InputBar from "./components/InputBar";
 import StatusStrip from "./components/StatusStrip";
+import {
+  DEFAULT_MESSAGES,
+  getActiveConversation,
+  loadConversationStore,
+  saveConversationStore,
+  updateActiveConversationMessages,
+} from "./services/conversationStorage";
 import { checkOllamaStatus, streamMessage } from "./services/ollama";
-import type { Message } from "./types/message";
+import type {
+  ConversationStore,
+  Message,
+} from "./types/message";
 import "./App.css";
 
 export type ExpressionCommand = {
@@ -119,17 +129,13 @@ function detectExpression(
 }
 
 function App() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      sender: "amadeus",
-      text: "AMADEUS cognitive interface initialized.",
-    },
-    {
-      sender: "amadeus",
-      text: "Local systems are online. Awaiting operator input.",
-    },
-  ]);
+  const [messages, setMessages] =
+    useState<Message[]>(DEFAULT_MESSAGES);
 
+  const [conversationStore, setConversationStore] =
+    useState<ConversationStore | null>(null);
+
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [brainOnline, setBrainOnline] = useState(false);
@@ -143,6 +149,7 @@ function App() {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const expressionTimeoutRef = useRef<number | null>(null);
+  const saveTimeoutRef = useRef<number | null>(null);
 
   // Prevent the same detected expression from restarting on every token.
   const lastTriggeredExpressionRef = useRef<string | null>(null);
@@ -158,9 +165,83 @@ function App() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const restoreConversationHistory = async () => {
+      try {
+        const loadedStore = await loadConversationStore();
+
+        if (cancelled) {
+          return;
+        }
+
+        const activeConversation =
+          getActiveConversation(loadedStore);
+
+        setConversationStore(loadedStore);
+        setMessages(activeConversation.messages);
+      } catch (error) {
+        console.error(
+          "Unable to restore conversation history:",
+          error
+        );
+      } finally {
+        if (!cancelled) {
+          setHistoryLoaded(true);
+        }
+      }
+    };
+
+    restoreConversationHistory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!historyLoaded || !conversationStore) {
+      return;
+    }
+
+    const updatedStore = updateActiveConversationMessages(
+      conversationStore,
+      messages
+    );
+
+    setConversationStore(updatedStore);
+
+    if (saveTimeoutRef.current !== null) {
+      window.clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = window.setTimeout(() => {
+      saveConversationStore(updatedStore).catch((error: unknown) => {
+        console.error(
+          "Unable to save conversation history:",
+          error
+        );
+      });
+
+      saveTimeoutRef.current = null;
+    }, 500);
+
+    return () => {
+      if (saveTimeoutRef.current !== null) {
+        window.clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+    };
+  }, [messages, historyLoaded]);
+
+  useEffect(() => {
     return () => {
       if (expressionTimeoutRef.current !== null) {
         window.clearTimeout(expressionTimeoutRef.current);
+      }
+
+      if (saveTimeoutRef.current !== null) {
+        window.clearTimeout(saveTimeoutRef.current);
       }
     };
   }, []);

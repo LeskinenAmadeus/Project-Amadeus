@@ -12,17 +12,6 @@ declare global {
 window.PIXI = PIXI;
 Live2DModel.registerTicker(PIXI.Ticker);
 
-const EXPRESSIONS = [
-  "Arm Change",
-  "Blush 1",
-  "Blush 2",
-  "Stanby Angry",
-  "Stanby Sad",
-  "Stanby Scared",
-  "Stanby Smile",
-  "Stanby Surprised",
-];
-
 const MOTIONS = [
   {
     label: "Idle Loop",
