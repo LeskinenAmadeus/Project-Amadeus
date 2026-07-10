@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import * as PIXI from "pixi.js";
 import { Live2DModel } from "pixi-live2d-display/cubism4";
+import type { ExpressionCommand } from "../App";
 
 declare global {
   interface Window {
@@ -23,19 +24,42 @@ const EXPRESSIONS = [
 ];
 
 const MOTIONS = [
-  { label: "Idle Loop", group: "Idle", index: 0 },
-  { label: "Head Movement", group: "TapHead", index: 0 },
-  { label: "Sleepy", group: "TapBody", index: 0 },
-  { label: "Focused Stare", group: "Special", index: 0 },
-  { label: "Penguin Sway", group: "Special", index: 1 },
+  {
+    label: "Idle Loop",
+    group: "Idle",
+    index: 0,
+  },
+  {
+    label: "Head Movement",
+    group: "TapHead",
+    index: 0,
+  },
+  {
+    label: "Sleepy",
+    group: "TapBody",
+    index: 0,
+  },
+  {
+    label: "Focused Stare",
+    group: "Special",
+    index: 0,
+  },
+  {
+    label: "Penguin Sway",
+    group: "Special",
+    index: 1,
+  },
 ];
 
 type Live2DViewerProps = {
-  activeExpression: string | null;
+  activeExpression: ExpressionCommand | null;
   activeMotion: string | null;
 };
 
-function Live2DViewer({ activeExpression, activeMotion }: Live2DViewerProps) {
+function Live2DViewer({
+  activeExpression,
+  activeMotion,
+}: Live2DViewerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const modelRef = useRef<Live2DModel | null>(null);
 
@@ -46,7 +70,17 @@ function Live2DViewer({ activeExpression, activeMotion }: Live2DViewerProps) {
     model.expression(expressionName);
   };
 
-  const startMotion = (group: string, index: number) => {
+  const resetExpression = () => {
+    const model = modelRef.current;
+    if (!model) return;
+
+    model.internalModel.motionManager.expressionManager?.resetExpression();
+  };
+
+  const startMotion = (
+    group: string,
+    index: number
+  ) => {
     const model = modelRef.current;
     if (!model) return;
 
@@ -54,19 +88,27 @@ function Live2DViewer({ activeExpression, activeMotion }: Live2DViewerProps) {
   };
 
   const startMotionByName = (motionName: string) => {
-    const motion = MOTIONS.find((item) => item.label === motionName);
+    const motion = MOTIONS.find(
+      (item) => item.label === motionName
+    );
+
     if (!motion) return;
 
     startMotion(motion.group, motion.index);
   };
 
   useEffect(() => {
-    if (!activeExpression) return;
-    setExpression(activeExpression);
-  }, [activeExpression]);
+    if (activeExpression) {
+      setExpression(activeExpression.name);
+      return;
+    }
+
+    resetExpression();
+  }, [activeExpression?.id]);
 
   useEffect(() => {
     if (!activeMotion) return;
+
     startMotionByName(activeMotion);
   }, [activeMotion]);
 
@@ -76,24 +118,42 @@ function Live2DViewer({ activeExpression, activeMotion }: Live2DViewerProps) {
     let resizeObserver: ResizeObserver | null = null;
     let destroyed = false;
 
-    type FramingMode = "small" | "medium" | "large";
+    type FramingMode =
+      | "small"
+      | "medium"
+      | "large";
 
-    const getFramingMode = (width: number, height: number): FramingMode => {
-      if (width < 320 || height < 420) return "small";
-      if (width < 520 || height < 620) return "medium";
+    const getFramingMode = (
+      width: number,
+      height: number
+    ): FramingMode => {
+      if (width < 320 || height < 420) {
+        return "small";
+      }
+
+      if (width < 520 || height < 620) {
+        return "medium";
+      }
+
       return "large";
     };
 
     const fitModelToContainer = () => {
-      if (!app || !model || !containerRef.current) return;
+      if (!app || !model || !containerRef.current) {
+        return;
+      }
 
-      const width = containerRef.current.clientWidth;
-      const height = containerRef.current.clientHeight;
+      const width =
+        containerRef.current.clientWidth;
+
+      const height =
+        containerRef.current.clientHeight;
 
       app.renderer.resize(width, height);
 
       const mode = getFramingMode(width, height);
-      const isCompact = width < 520 || height < 520;
+      const isCompact =
+        width < 520 || height < 520;
 
       const scale =
         mode === "small"
@@ -133,9 +193,12 @@ function Live2DViewer({ activeExpression, activeMotion }: Live2DViewerProps) {
       containerRef.current.appendChild(app.view);
 
       try {
-        model = await Live2DModel.from("/live2d/Kurisu/Kurisu.model3.json", {
-          autoInteract: false,
-        });
+        model = await Live2DModel.from(
+          "/live2d/Kurisu/Kurisu.model3.json",
+          {
+            autoInteract: false,
+          }
+        );
 
         if (destroyed || !app || !model) return;
 
@@ -143,15 +206,21 @@ function Live2DViewer({ activeExpression, activeMotion }: Live2DViewerProps) {
         model.anchor.set(0.5, 0.5);
 
         app.stage.addChild(model);
+
         fitModelToContainer();
 
         resizeObserver = new ResizeObserver(() => {
           fitModelToContainer();
         });
 
-        resizeObserver.observe(containerRef.current);
+        resizeObserver.observe(
+          containerRef.current
+        );
       } catch (error) {
-        console.error("Failed to load Live2D model:", error);
+        console.error(
+          "Failed to load Live2D model:",
+          error
+        );
       }
     };
 
@@ -159,6 +228,7 @@ function Live2DViewer({ activeExpression, activeMotion }: Live2DViewerProps) {
 
     return () => {
       destroyed = true;
+
       resizeObserver?.disconnect();
       modelRef.current = null;
       model?.destroy();
@@ -173,14 +243,19 @@ function Live2DViewer({ activeExpression, activeMotion }: Live2DViewerProps) {
 
   return (
     <div className="live2d-viewer">
-      <div ref={containerRef} className="live2d-container" />
+      <div
+        ref={containerRef}
+        className="live2d-container"
+      />
 
       <div className="expression-controls">
         {EXPRESSIONS.map((expression) => (
           <button
             key={expression}
             type="button"
-            onClick={() => setExpression(expression)}
+            onClick={() =>
+              setExpression(expression)
+            }
           >
             {expression}
           </button>
@@ -192,7 +267,12 @@ function Live2DViewer({ activeExpression, activeMotion }: Live2DViewerProps) {
           <button
             key={motion.label}
             type="button"
-            onClick={() => startMotion(motion.group, motion.index)}
+            onClick={() =>
+              startMotion(
+                motion.group,
+                motion.index
+              )
+            }
           >
             {motion.label}
           </button>

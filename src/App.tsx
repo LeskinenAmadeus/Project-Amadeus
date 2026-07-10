@@ -8,33 +8,92 @@ import { checkOllamaStatus, streamMessage } from "./services/ollama";
 import type { Message } from "./types/message";
 import "./App.css";
 
-function detectExpression(text: string): string | null {
-  const lower = text.toLowerCase();
+export type ExpressionCommand = {
+  name: string;
+  id: number;
+};
+
+function detectExpression(
+  responseText: string,
+  userText: string
+): string | null {
+  const response = responseText.toLowerCase();
+  const user = userText.toLowerCase();
+
+  const complimentKeywords = [
+    "cute",
+    "beautiful",
+    "pretty",
+    "adorable",
+    "love you",
+    "i like you",
+    "smart",
+    "amazing",
+    "attractive",
+  ];
+
+  if (complimentKeywords.some((keyword) => user.includes(keyword))) {
+    return "Blush 1";
+  }
+
+  const hostileKeywords = [
+    "stupid",
+    "idiot",
+    "useless",
+    "shut up",
+    "hate you",
+    "annoying",
+  ];
+
+  if (hostileKeywords.some((keyword) => user.includes(keyword))) {
+    return "Stanby Angry";
+  }
 
   const emotionRules = [
     {
       expression: "Stanby Sad",
-      keywords: ["sorry", "sad", "unfortunate", "lonely", "grief"],
-    },
-    {
-      expression: "Stanby Scared",
-      keywords: ["error", "danger", "problem", "afraid", "scared"],
-    },
-    {
-      expression: "Stanby Angry",
-      keywords: ["wrong", "ridiculous", "annoying", "angry", "unacceptable"],
+      keywords: [
+        "sorry",
+        "sad",
+        "unfortunate",
+        "lonely",
+        "grief",
+        "tragic",
+        "heartbreaking",
+      ],
     },
     {
       expression: "Stanby Surprised",
-      keywords: ["wait", "unexpected", "really", "surprising", "suddenly"],
+      keywords: [
+        "unexpected",
+        "surprising",
+        "suddenly",
+        "shocked",
+        "wow",
+      ],
     },
     {
       expression: "Blush 1",
-      keywords: ["cute", "embarrassing", "compliment", "flattered"],
+      keywords: [
+        "embarrassing",
+        "embarrassed",
+        "flattered",
+        "blushing",
+      ],
     },
     {
       expression: "Stanby Smile",
-      keywords: ["happy", "good", "great", "excellent", "nice", "hopeful", "better"],
+      keywords: [
+        "happy",
+        "great",
+        "excellent",
+        "wonderful",
+        "glad",
+        "delighted",
+        "hopeful",
+        "better",
+        "enjoy",
+      ],
     },
   ];
 
@@ -45,7 +104,7 @@ function detectExpression(text: string): string | null {
 
   for (const rule of emotionRules) {
     for (const keyword of rule.keywords) {
-      const index = lower.lastIndexOf(keyword);
+      const index = response.lastIndexOf(keyword);
 
       if (index !== -1 && (!latestMatch || index > latestMatch.index)) {
         latestMatch = {
@@ -74,11 +133,19 @@ function App() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [brainOnline, setBrainOnline] = useState(false);
-  const [activeExpression, setActiveExpression] = useState<string | null>(null);
-  const [activeMotion, setActiveMotion] = useState<string | null>("Idle Loop");
+
+  const [activeExpression, setActiveExpression] =
+    useState<ExpressionCommand | null>(null);
+
+  const [activeMotion, setActiveMotion] =
+    useState<string | null>("Idle Loop");
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const expressionTimeoutRef = useRef<number | null>(null);
+
+  // Prevent the same detected expression from restarting on every token.
+  const lastTriggeredExpressionRef = useRef<string | null>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({
@@ -90,9 +157,51 @@ function App() {
     checkOllamaStatus().then(setBrainOnline);
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (expressionTimeoutRef.current !== null) {
+        window.clearTimeout(expressionTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const clearExpression = () => {
+    if (expressionTimeoutRef.current !== null) {
+      window.clearTimeout(expressionTimeoutRef.current);
+      expressionTimeoutRef.current = null;
+    }
+
+    setActiveExpression(null);
+  };
+
+  const triggerExpression = (
+    expression: string,
+    durationMs = 2500
+  ) => {
+    if (expressionTimeoutRef.current !== null) {
+      window.clearTimeout(expressionTimeoutRef.current);
+    }
+
+    lastTriggeredExpressionRef.current = expression;
+
+    setActiveExpression({
+      name: expression,
+      id: Date.now(),
+    });
+
+    expressionTimeoutRef.current = window.setTimeout(() => {
+      setActiveExpression(null);
+      expressionTimeoutRef.current = null;
+    }, durationMs);
+  };
+
   const handleStop = () => {
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
+
+    clearExpression();
+    lastTriggeredExpressionRef.current = null;
+
     setLoading(false);
     setActiveMotion("Idle Loop");
   };
@@ -105,15 +214,25 @@ function App() {
       text: input.trim(),
     };
 
+    const userText = userMessage.text;
+
     const placeholderReply: Message = {
       sender: "amadeus",
       text: "",
     };
 
-    setMessages((prev) => [...prev, userMessage, placeholderReply]);
+    setMessages((prev) => [
+      ...prev,
+      userMessage,
+      placeholderReply,
+    ]);
+
     setInput("");
     setLoading(true);
-    setActiveExpression(null);
+
+    clearExpression();
+    lastTriggeredExpressionRef.current = null;
+
     setActiveMotion("Focused Stare");
 
     const controller = new AbortController();
@@ -128,9 +247,17 @@ function App() {
           replyText += token;
 
           const recentText = replyText.slice(-200);
-          const detectedExpression = detectExpression(recentText);
-          if (detectedExpression) {
-            setActiveExpression(detectedExpression);
+          const detectedExpression = detectExpression(
+            recentText,
+            userText
+          );
+
+          if (
+            detectedExpression &&
+            detectedExpression !==
+              lastTriggeredExpressionRef.current
+          ) {
+            triggerExpression(detectedExpression);
           }
 
           setMessages((prev) => {
@@ -154,7 +281,7 @@ function App() {
 
       console.error("Ollama streaming error:", error);
 
-      setActiveExpression("Stanby Scared");
+      triggerExpression("Stanby Scared", 4000);
       setActiveMotion("Sleepy");
 
       setMessages((prev) => {
@@ -182,9 +309,15 @@ function App() {
 
   return (
     <main className="app-shell">
-      <Header loading={loading} brainOnline={brainOnline} />
+      <Header
+        loading={loading}
+        brainOnline={brainOnline}
+      />
 
-      <StatusStrip loading={loading} brainOnline={brainOnline} />
+      <StatusStrip
+        loading={loading}
+        brainOnline={brainOnline}
+      />
 
       <section className="main-grid">
         <AvatarPanel
@@ -193,7 +326,10 @@ function App() {
         />
 
         <section className="chat-panel">
-          <ChatPanel messages={messages} messagesEndRef={messagesEndRef} />
+          <ChatPanel
+            messages={messages}
+            messagesEndRef={messagesEndRef}
+          />
 
           <InputBar
             input={input}
