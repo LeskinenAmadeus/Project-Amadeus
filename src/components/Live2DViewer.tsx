@@ -32,9 +32,10 @@ const MOTIONS = [
 
 type Live2DViewerProps = {
   activeExpression: string | null;
+  activeMotion: string | null;
 };
 
-function Live2DViewer({ activeExpression }: Live2DViewerProps) {
+function Live2DViewer({ activeExpression, activeMotion }: Live2DViewerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const modelRef = useRef<Live2DModel | null>(null);
 
@@ -46,16 +47,28 @@ function Live2DViewer({ activeExpression }: Live2DViewerProps) {
   };
 
   const startMotion = (group: string, index: number) => {
-  const model = modelRef.current;
-  if (!model) return;
+    const model = modelRef.current;
+    if (!model) return;
 
-  model.motion(group, index);
-};
+    model.motion(group, index);
+  };
+
+  const startMotionByName = (motionName: string) => {
+    const motion = MOTIONS.find((item) => item.label === motionName);
+    if (!motion) return;
+
+    startMotion(motion.group, motion.index);
+  };
 
   useEffect(() => {
     if (!activeExpression) return;
     setExpression(activeExpression);
   }, [activeExpression]);
+
+  useEffect(() => {
+    if (!activeMotion) return;
+    startMotionByName(activeMotion);
+  }, [activeMotion]);
 
   useEffect(() => {
     let app: PIXI.Application | null = null;
@@ -146,7 +159,6 @@ function Live2DViewer({ activeExpression }: Live2DViewerProps) {
 
     return () => {
       destroyed = true;
-
       resizeObserver?.disconnect();
       modelRef.current = null;
       model?.destroy();
@@ -174,16 +186,17 @@ function Live2DViewer({ activeExpression }: Live2DViewerProps) {
           </button>
         ))}
       </div>
+
       <div className="motion-controls">
         {MOTIONS.map((motion) => (
           <button
             key={motion.label}
             type="button"
             onClick={() => startMotion(motion.group, motion.index)}
-           >
-              {motion.label}
+          >
+            {motion.label}
           </button>
-         ))}
+        ))}
       </div>
     </div>
   );

@@ -11,49 +11,79 @@ import "./App.css";
 function detectExpression(text: string): string | null {
   const lower = text.toLowerCase();
 
-  if (lower.includes("sorry") || lower.includes("sad") || lower.includes("unfortunate")) {
-    return "Stanby Sad";
+  const emotionRules = [
+    {
+      expression: "Stanby Sad",
+      keywords: ["sorry", "sad", "unfortunate", "lonely", "grief"],
+    },
+    {
+      expression: "Stanby Scared",
+      keywords: ["error", "danger", "problem", "afraid", "scared"],
+    },
+    {
+      expression: "Stanby Angry",
+      keywords: ["wrong", "ridiculous", "annoying", "angry", "unacceptable"],
+    },
+    {
+      expression: "Stanby Surprised",
+      keywords: ["wait", "unexpected", "really", "surprising", "suddenly"],
+    },
+    {
+      expression: "Blush 1",
+      keywords: ["cute", "embarrassing", "compliment", "flattered"],
+    },
+    {
+      expression: "Stanby Smile",
+      keywords: ["happy", "good", "great", "excellent", "nice", "hopeful", "better"],
+    },
+  ];
+
+  let latestMatch: {
+    expression: string;
+    index: number;
+  } | null = null;
+
+  for (const rule of emotionRules) {
+    for (const keyword of rule.keywords) {
+      const index = lower.lastIndexOf(keyword);
+
+      if (index !== -1 && (!latestMatch || index > latestMatch.index)) {
+        latestMatch = {
+          expression: rule.expression,
+          index,
+        };
+      }
+    }
   }
 
-  if (lower.includes("error") || lower.includes("danger") || lower.includes("problem")) {
-    return "Stanby Scared";
-  }
-
-  if (lower.includes("wrong") || lower.includes("ridiculous") || lower.includes("annoying")) {
-    return "Stanby Angry";
-  }
-
-  if (lower.includes("wait") || lower.includes("unexpected") || lower.includes("really")) {
-    return "Stanby Surprised";
-  }
-
-  if (lower.includes("cute") || lower.includes("embarrassing") || lower.includes("compliment")) {
-    return "Blush 1";
-  }
-
-  if (lower.includes("good") || lower.includes("great") || lower.includes("excellent") || lower.includes("nice")) {
-    return "Stanby Smile";
-  }
-
-  return null;
+  return latestMatch?.expression ?? null;
 }
 
 function App() {
   const [messages, setMessages] = useState<Message[]>([
-    { sender: "amadeus", text: "AMADEUS cognitive interface initialized." },
-    { sender: "amadeus", text: "Local systems are online. Awaiting operator input." },
+    {
+      sender: "amadeus",
+      text: "AMADEUS cognitive interface initialized.",
+    },
+    {
+      sender: "amadeus",
+      text: "Local systems are online. Awaiting operator input.",
+    },
   ]);
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [brainOnline, setBrainOnline] = useState(false);
   const [activeExpression, setActiveExpression] = useState<string | null>(null);
+  const [activeMotion, setActiveMotion] = useState<string | null>("Idle Loop");
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+    });
   }, [messages, loading]);
 
   useEffect(() => {
@@ -64,6 +94,7 @@ function App() {
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
     setLoading(false);
+    setActiveMotion("Idle Loop");
   };
 
   const handleSend = async () => {
@@ -83,6 +114,7 @@ function App() {
     setInput("");
     setLoading(true);
     setActiveExpression(null);
+    setActiveMotion("Focused Stare");
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -95,7 +127,8 @@ function App() {
         (token) => {
           replyText += token;
 
-          const detectedExpression = detectExpression(replyText);
+          const recentText = replyText.slice(-200);
+          const detectedExpression = detectExpression(recentText);
           if (detectedExpression) {
             setActiveExpression(detectedExpression);
           }
@@ -115,10 +148,14 @@ function App() {
         controller.signal
       );
     } catch (error) {
-      if ((error as Error).name === "AbortError") return;
+      if ((error as Error).name === "AbortError") {
+        return;
+      }
 
       console.error("Ollama streaming error:", error);
+
       setActiveExpression("Stanby Scared");
+      setActiveMotion("Sleepy");
 
       setMessages((prev) => {
         const next = [...prev];
@@ -134,6 +171,11 @@ function App() {
     } finally {
       abortControllerRef.current = null;
       setLoading(false);
+
+      if (!controller.signal.aborted) {
+        setActiveMotion("Idle Loop");
+      }
+
       checkOllamaStatus().then(setBrainOnline);
     }
   };
@@ -141,10 +183,14 @@ function App() {
   return (
     <main className="app-shell">
       <Header loading={loading} brainOnline={brainOnline} />
+
       <StatusStrip loading={loading} brainOnline={brainOnline} />
 
       <section className="main-grid">
-        <AvatarPanel activeExpression={activeExpression} />
+        <AvatarPanel
+          activeExpression={activeExpression}
+          activeMotion={activeMotion}
+        />
 
         <section className="chat-panel">
           <ChatPanel messages={messages} messagesEndRef={messagesEndRef} />
